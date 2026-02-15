@@ -1,0 +1,26 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #0a0a0a;
+}
+
+canvas {
+  display: block;
+  border: 2px solid #333;
+}
+
+#app {
+  display: none;
+}
+
