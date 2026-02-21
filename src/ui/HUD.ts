@@ -2,13 +2,15 @@
  * HUD displays in-game UI: timer, instructions, and status text.
  */
 
-import { Container, Text, TextStyle } from 'pixi.js'
+import { Container, Graphics, Text, TextStyle } from 'pixi.js'
 
 export class HUD {
   private container: Container
   private timerText: Text | null = null
   private instructionText: Text | null = null
   private statusText: Text | null = null
+  private menuButton: Graphics | null = null
+  private menuButtonText: Text | null = null
 
   constructor() {
     this.container = new Container()
@@ -80,6 +82,70 @@ export class HUD {
   }
 
   /**
+   * Display menu button in top-right corner.
+   */
+  displayMenuButton(): void {
+    if (!this.menuButton) {
+      // Button background
+      this.menuButton = new Graphics()
+      this.menuButton.rect(-45, -15, 90, 30)
+      this.menuButton.fill({ color: 0x333333 })
+      this.menuButton.stroke({ color: 0x666666, width: 2 })
+      this.menuButton.x = 720
+      this.menuButton.y = 70
+      this.menuButton.eventMode = 'static'
+      this.menuButton.cursor = 'pointer'
+      this.container.addChild(this.menuButton)
+
+      // Button text
+      const buttonStyle = new TextStyle({
+        fontFamily: 'monospace',
+        fontSize: 14,
+        fontWeight: 'bold',
+        fill: 0xffffff,
+        align: 'center',
+      })
+
+      this.menuButtonText = new Text({ text: '🏠 Menu', style: buttonStyle })
+      this.menuButtonText.x = 720
+      this.menuButtonText.y = 70
+      this.menuButtonText.anchor.set(0.5, 0.5)
+      this.container.addChild(this.menuButtonText)
+    }
+  }
+
+  /**
+   * Check if a click/tap hits the menu button.
+   */
+  isMenuButtonClicked(x: number, y: number): boolean {
+    if (!this.menuButton) {
+      return false
+    }
+    const bounds = this.menuButton.getBounds()
+    return x >= bounds.x && x <= bounds.x + bounds.width &&
+           y >= bounds.y && y <= bounds.y + bounds.height
+  }
+
+  /**
+   * Set menu button hover state (for visual feedback).
+   */
+  setMenuButtonHover(isHovered: boolean): void {
+    if (!this.menuButton) return
+    // Scale and color change on hover
+    this.menuButton.scale.set(isHovered ? 1.1 : 1.0);
+    this.menuButton.fill({ color: isHovered ? 0x444444 : 0x333333 });
+  }
+
+  /**
+   * Set menu button pressed state (for click feedback).
+   */
+  setMenuButtonPressed(isPressed: boolean): void {
+    if (!this.menuButton) return
+    // Scale down on press for feedback
+    this.menuButton.scale.set(isPressed ? 0.95 : 1.0);
+  }
+
+  /**
    * Clear all HUD elements.
    */
   clear(): void {
@@ -87,6 +153,8 @@ export class HUD {
     this.timerText = null
     this.instructionText = null
     this.statusText = null
+    this.menuButton = null
+    this.menuButtonText = null
   }
 
   /**
