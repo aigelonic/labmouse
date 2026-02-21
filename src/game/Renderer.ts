@@ -2,10 +2,11 @@
  * Renderer handles PixiJS rendering, including fog-of-war masking.
  */
 
-import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Application, Container, Graphics, Text, TextStyle, Sprite, Texture } from 'pixi.js';
 import { Player } from './Player';
 import { Maze } from './Maze';
 import { Viewport } from './Viewport';
+import type { Particle } from './Animation';
 
 export class Renderer {
   app: Application;
@@ -22,6 +23,11 @@ export class Renderer {
   private fogLeftRect: Graphics;
   private fogRightRect: Graphics;
   private fogGlowCircle: Graphics;
+  
+  // Animation state
+  private playerScale: number = 1;
+  private screenFadeOverlay: Sprite | null = null;
+  private fadeTexture: Texture | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -31,39 +37,75 @@ export class Renderer {
     this.objectsLayer = new Container();
     this.uiLayer = new Container();
 
-    this.fogMask = new Graphics();
-    
-    // Initialize reusable fog Graphics objects
-    this.fogTopRect = new Graphics();
-    this.fogBottomRect = new Graphics();
-    this.fogLeftRect = new Graphics();
-    this.fogRightRect = new Graphics();
-    this.fogGlowCircle = new Graphics();
+    // Don't create Graphics objects yet - they need PixiJS context
+    // These will be created in init() after app.init() completes
+    this.fogMask = null as any;
+    this.fogTopRect = null as any;
+    this.fogBottomRect = null as any;
+    this.fogLeftRect = null as any;
+    this.fogRightRect = null as any;
+    this.fogGlowCircle = null as any;
   }
 
   /**
    * Initialize PixiJS app asynchronously.
    */
   async init(): Promise<void> {
+    console.log('[Renderer.init] Starting renderer initialization...');
+    
     await this.app.init({
       canvas: this.canvas,
       width: 800,
       height: 600,
       backgroundColor: 0x0a0a0a,
     });
+    console.log('[Renderer.init] PixiJS app initialized, creating Graphics objects...');
+
+    // NOW create all Graphics objects (after app.init() has context)
+    this.fogMask = new Graphics();
+    this.fogTopRect = new Graphics();
+    this.fogBottomRect = new Graphics();
+    this.fogLeftRect = new Graphics();
+    this.fogRightRect = new Graphics();
+    this.fogGlowCircle = new Graphics();
+    console.log('[Renderer.init] All Graphics objects created successfully');
+
+    // Create screen fade overlay using a texture-based Sprite (more reliable than Graphics)
+    console.log('[Renderer.init] Creating screen fade overlay sprite...');
+    const fadeCanvas = document.createElement('canvas');
+    fadeCanvas.width = 800;
+    fadeCanvas.height = 600;
+    const fadeCtx = fadeCanvas.getContext('2d');
+    if (fadeCtx) {
+      // Draw black color (alpha will be controlled by Sprite.alpha)
+      fadeCtx.fillStyle = 'black';
+      fadeCtx.fillRect(0, 0, 800, 600);
+    }
+    this.fadeTexture = Texture.from(fadeCanvas);
+    this.screenFadeOverlay = new Sprite(this.fadeTexture);
+    this.screenFadeOverlay.alpha = 0; // Start transparent
+    console.log('[Renderer.init] Screen fade overlay created successfully');
 
     this.app.stage.addChild(this.container);
     this.container.addChild(this.wallsLayer);
-    this.container.addChild(this.objectsLayer);
     this.container.addChild(this.fogMask);
+    this.container.addChild(this.objectsLayer);
     this.container.addChild(this.uiLayer);
     
-    // Add fog Graphics objects to fogMask once
+    // Add fog Graphics objects to fogMask
     this.fogMask.addChild(this.fogTopRect);
     this.fogMask.addChild(this.fogBottomRect);
     this.fogMask.addChild(this.fogLeftRect);
     this.fogMask.addChild(this.fogRightRect);
     this.fogMask.addChild(this.fogGlowCircle);
+    
+    // Add screen fade overlay to UI layer
+    this.uiLayer.addChild(this.screenFadeOverlay);
+    
+    // Render once to fully initialize all objects with render context
+    console.log('[Renderer.init] Performing initial render to sync context...');
+    this.app.render();
+    console.log('[Renderer.init] Renderer initialization complete');
   }
 
   /**
@@ -114,70 +156,137 @@ export class Renderer {
   renderPlayer(player: Player, viewport: Viewport): void {
     const screenPos = viewport.worldToScreen(player.x, player.y);
 
-    const playerGraphics = new Graphics();
-    playerGraphics.circle(0, 0, player.radius);
-    playerGraphics.fill(0xff6b6b); // Red mouse
-    playerGraphics.stroke({ color: 0xff0000, width: 2 });
+    const mouseEmoji = new Text({
+      text: '🐭',
+      style: {
+        fontSize: player.radius * 2.5,
+        align: 'center',
+      },
+    });
+    mouseEmoji.anchor.set(0.5);
+    mouseEmoji.x = screenPos.x;
+    mouseEmoji.y = screenPos.y;
+    mouseEmoji.scale.set(this.playerScale); // Apply animation scale
 
-    playerGraphics.x = screenPos.x;
-    playerGraphics.y = screenPos.y;
-
-    this.objectsLayer.addChild(playerGraphics);
+    this.objectsLayer.addChild(mouseEmoji);
   }
 
   /**
-   * Render the cheese goal.
+   * Set player scale for bounce animation.
+   */
+  setPlayerScale(scale: number): void {
+    this.playerScale = scale;
+  }
+
+  /**
+   * Render the cheese goal (only if visible in fog-of-war).
    */
   renderCheese(cheeseX: number, cheeseY: number, viewport: Viewport): void {
+    // Only render cheese if it's visible within fog-of-war
+    // Use area visibility with cheese size (24) to prevent blinking at fog edge
+    if (!viewport.isAreaVisible(cheeseX, cheeseY, 24)) {
+      return;
+    }
+    
     const screenPos = viewport.worldToScreen(cheeseX, cheeseY);
-    const cheeseSize = 10;
 
-    const cheeseGraphics = new Graphics();
-    cheeseGraphics.rect(-cheeseSize / 2, -cheeseSize / 2, cheeseSize, cheeseSize);
-    cheeseGraphics.fill(0xffd700); // Yellow cheese
-    cheeseGraphics.stroke({ color: 0xffaa00, width: 1 });
+    const cheeseEmoji = new Text({
+      text: '🧀',
+      style: {
+        fontSize: 24,
+        align: 'center',
+      },
+    });
+    cheeseEmoji.anchor.set(0.5);
+    cheeseEmoji.x = screenPos.x;
+    cheeseEmoji.y = screenPos.y;
 
-    cheeseGraphics.x = screenPos.x;
-    cheeseGraphics.y = screenPos.y;
-
-    this.objectsLayer.addChild(cheeseGraphics);
+    this.objectsLayer.addChild(cheeseEmoji);
   }
 
   /**
-   * Render fog-of-war mask (dark vignette around visible area with glow effect).
+   * Render fog-of-war using a canvas with radial gradient.
+   * This creates a smooth circular gradient from transparent center to dark edges.
    */
   renderFogOfWar(viewport: Viewport): void {
-    const centerX = this.app.canvas.width / 2;
-    const centerY = this.app.canvas.height / 2;
-    const visibleRadius = viewport.radius;
+    try {
+      // Guard: ensure app and canvas are both initialized
+      if (!this.app || !this.app.canvas) {
+        return;
+      }
+      
+      const canvasW = this.app.canvas.width;
+      const canvasH = this.app.canvas.height;
+      const visibleRadius = viewport.radius;
+      
+      // Clear previous fog graphics
+      this.fogMask.removeChildren();
+      
+      // Create a canvas with radial gradient for fog effect
+      const fogCanvas = document.createElement('canvas');
+      fogCanvas.width = canvasW;
+      fogCanvas.height = canvasH;
+      
+      const ctx = fogCanvas.getContext('2d');
+      if (!ctx) return; // Canvas not supported
+      
+      // Create radial gradient: transparent in center -> black at edges
+      const gradient = ctx.createRadialGradient(
+        canvasW / 2, canvasH / 2, 0,           // Inner circle (center)
+        canvasW / 2, canvasH / 2, visibleRadius + 100  // Outer circle
+      );
+      
+      // Gradient stops: transparent near center, opaque at edges
+      gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');      // Center: transparent
+      gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.3)');  // 60% toward edge: light fog
+      gradient.addColorStop(1.0, 'rgba(0, 0, 0, 1)');    // Edge: full black
+      
+      // Fill with gradient
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      
+      // Convert canvas to sprite and add to fogMask
+      const fogTexture = Texture.from(fogCanvas);
+      const fogSprite = new Sprite(fogTexture);
+      this.fogMask.addChild(fogSprite);
+    } catch {
+      // Silently ignore errors (e.g., during tests where PixiJS is not fully initialized)
+      // In production, the guard checks prevent this from happening
+    }
+  }
+
+  /**
+   * Render particles on screen.
+   */
+  renderParticles(particles: Particle[]): void {
+    for (const particle of particles) {
+      const particleText = new Text({
+        text: particle.emoji,
+        style: {
+          fontSize: 16,
+          align: 'center',
+        },
+      });
+      particleText.x = particle.x;
+      particleText.y = particle.y;
+      particleText.anchor.set(0.5);
+      particleText.alpha = Math.max(0, particle.life); // Fade out as life decreases
+      
+      this.objectsLayer.addChild(particleText);
+    }
+  }
+
+  /**
+   * Render screen fade overlay for transitions.
+   */
+  renderScreenFade(fadeAlpha: number): void {
+    if (!this.screenFadeOverlay) {
+      console.warn('[Renderer.renderScreenFade] WARNING: screenFadeOverlay is null! Renderer not initialized?');
+      return;
+    }
     
-    // Reuse Graphics objects and just update their geometry
-    // Top
-    this.fogTopRect.clear();
-    this.fogTopRect.rect(0, 0, this.app.canvas.width, centerY - visibleRadius);
-    this.fogTopRect.fill({ color: 0x000000, alpha: 0.85 });
-    
-    // Bottom
-    this.fogBottomRect.clear();
-    this.fogBottomRect.rect(0, centerY + visibleRadius, this.app.canvas.width, this.app.canvas.height - (centerY + visibleRadius));
-    this.fogBottomRect.fill({ color: 0x000000, alpha: 0.85 });
-    
-    // Left
-    this.fogLeftRect.clear();
-    this.fogLeftRect.rect(0, centerY - visibleRadius, centerX - visibleRadius, visibleRadius * 2);
-    this.fogLeftRect.fill({ color: 0x000000, alpha: 0.85 });
-    
-    // Right
-    this.fogRightRect.clear();
-    this.fogRightRect.rect(centerX + visibleRadius, centerY - visibleRadius, this.app.canvas.width - (centerX + visibleRadius), visibleRadius * 2);
-    this.fogRightRect.fill({ color: 0x000000, alpha: 0.85 });
-    
-    // Glow effect at fog edge
-    this.fogGlowCircle.clear();
-    this.fogGlowCircle.circle(0, 0, visibleRadius);
-    this.fogGlowCircle.stroke({ color: 0x6699ff, width: 2, alpha: 0.3 });
-    this.fogGlowCircle.x = centerX;
-    this.fogGlowCircle.y = centerY;
+    // Simply set the alpha on the sprite - no Graphics context needed
+    this.screenFadeOverlay.alpha = Math.max(0, Math.min(1, fadeAlpha));
   }
 
   /**
