@@ -15,6 +15,13 @@ export class Renderer {
   wallsLayer: Container;
   objectsLayer: Container;
   uiLayer: Container;
+  
+  // Reusable Graphics objects for fog-of-war (prevent memory leaks)
+  private fogTopRect: Graphics;
+  private fogBottomRect: Graphics;
+  private fogLeftRect: Graphics;
+  private fogRightRect: Graphics;
+  private fogGlowCircle: Graphics;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -25,6 +32,13 @@ export class Renderer {
     this.uiLayer = new Container();
 
     this.fogMask = new Graphics();
+    
+    // Initialize reusable fog Graphics objects
+    this.fogTopRect = new Graphics();
+    this.fogBottomRect = new Graphics();
+    this.fogLeftRect = new Graphics();
+    this.fogRightRect = new Graphics();
+    this.fogGlowCircle = new Graphics();
   }
 
   /**
@@ -43,6 +57,13 @@ export class Renderer {
     this.container.addChild(this.objectsLayer);
     this.container.addChild(this.fogMask);
     this.container.addChild(this.uiLayer);
+    
+    // Add fog Graphics objects to fogMask once
+    this.fogMask.addChild(this.fogTopRect);
+    this.fogMask.addChild(this.fogBottomRect);
+    this.fogMask.addChild(this.fogLeftRect);
+    this.fogMask.addChild(this.fogRightRect);
+    this.fogMask.addChild(this.fogGlowCircle);
   }
 
   /**
@@ -123,39 +144,40 @@ export class Renderer {
   }
 
   /**
-   * Render fog-of-war mask (dark vignette around visible area).
+   * Render fog-of-war mask (dark vignette around visible area with glow effect).
    */
   renderFogOfWar(viewport: Viewport): void {
-    this.fogMask.clear();
-    
     const centerX = this.app.canvas.width / 2;
     const centerY = this.app.canvas.height / 2;
     const visibleRadius = viewport.radius;
     
-    // Draw dark overlay in 4 rectangles around the visible circle
+    // Reuse Graphics objects and just update their geometry
     // Top
-    const topFog = new Graphics();
-    topFog.rect(0, 0, this.app.canvas.width, centerY - visibleRadius);
-    topFog.fill({ color: 0x000000, alpha: 0.85 });
-    this.fogMask.addChild(topFog);
+    this.fogTopRect.clear();
+    this.fogTopRect.rect(0, 0, this.app.canvas.width, centerY - visibleRadius);
+    this.fogTopRect.fill({ color: 0x000000, alpha: 0.85 });
     
     // Bottom
-    const bottomFog = new Graphics();
-    bottomFog.rect(0, centerY + visibleRadius, this.app.canvas.width, this.app.canvas.height - (centerY + visibleRadius));
-    bottomFog.fill({ color: 0x000000, alpha: 0.85 });
-    this.fogMask.addChild(bottomFog);
+    this.fogBottomRect.clear();
+    this.fogBottomRect.rect(0, centerY + visibleRadius, this.app.canvas.width, this.app.canvas.height - (centerY + visibleRadius));
+    this.fogBottomRect.fill({ color: 0x000000, alpha: 0.85 });
     
     // Left
-    const leftFog = new Graphics();
-    leftFog.rect(0, centerY - visibleRadius, centerX - visibleRadius, visibleRadius * 2);
-    leftFog.fill({ color: 0x000000, alpha: 0.85 });
-    this.fogMask.addChild(leftFog);
+    this.fogLeftRect.clear();
+    this.fogLeftRect.rect(0, centerY - visibleRadius, centerX - visibleRadius, visibleRadius * 2);
+    this.fogLeftRect.fill({ color: 0x000000, alpha: 0.85 });
     
     // Right
-    const rightFog = new Graphics();
-    rightFog.rect(centerX + visibleRadius, centerY - visibleRadius, this.app.canvas.width - (centerX + visibleRadius), visibleRadius * 2);
-    rightFog.fill({ color: 0x000000, alpha: 0.85 });
-    this.fogMask.addChild(rightFog);
+    this.fogRightRect.clear();
+    this.fogRightRect.rect(centerX + visibleRadius, centerY - visibleRadius, this.app.canvas.width - (centerX + visibleRadius), visibleRadius * 2);
+    this.fogRightRect.fill({ color: 0x000000, alpha: 0.85 });
+    
+    // Glow effect at fog edge
+    this.fogGlowCircle.clear();
+    this.fogGlowCircle.circle(0, 0, visibleRadius);
+    this.fogGlowCircle.stroke({ color: 0x6699ff, width: 2, alpha: 0.3 });
+    this.fogGlowCircle.x = centerX;
+    this.fogGlowCircle.y = centerY;
   }
 
   /**
@@ -223,12 +245,23 @@ export class Renderer {
   }
 
   /**
-   * Clear all layers.
+   * Clear all layers (destroy Graphics to prevent memory leaks).
    */
   clear(): void {
-    this.wallsLayer.removeChildren();
-    this.objectsLayer.removeChildren();
-    this.fogMask.clear();
-    this.uiLayer.removeChildren();
+    // Properly destroy all children to free memory
+    this.wallsLayer.removeChildren().forEach(child => child.destroy());
+    this.objectsLayer.removeChildren().forEach(child => child.destroy());
+    this.uiLayer.removeChildren().forEach(child => child.destroy());
+  }
+  
+  /**
+   * Destroy renderer and clean up all resources.
+   */
+  destroy(): void {
+    this.wallsLayer.destroy({ children: true });
+    this.objectsLayer.destroy({ children: true });
+    this.uiLayer.destroy({ children: true });
+    this.fogMask.destroy({ children: true });
+    this.container.destroy({ children: true });
   }
 }
