@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Enhancement Phase (Polish & Features)
+- **Emoji graphics**: Replaced primitive shapes with 🐭 (mouse) and 🧀 (cheese) emoji
+- **Sound effects**: Web Audio API programmatic sounds
+  - Movement blip (440Hz) on direction change
+  - Collection chime (C5→E5) when reaching cheese
+  - Victory fanfare (C5→E5→G5) on win screen
+- **Difficulty system**: Three difficulty levels with dynamic maze sizing
+  - Easy: 12×9 cells, 150px fog radius
+  - Medium: 16×12 cells, 120px fog radius
+  - Hard: 20×15 cells, 100px fog radius
+- **Leaderboard system**: LocalStorage persistence for top 5 times per difficulty
+- **Interactive UI**: 
+  - Clickable difficulty selector on title screen
+  - Leaderboard display showing top 5 times
+  - Difficulty indicator on HUD during gameplay
+  - Leaderboard position badge on win screen
+- **Unit tests**: 22 additional tests (SoundManager: 10, Leaderboard: 12)
+- **Total test coverage**: 79 passing tests
+
+### Changed - Enhancement Phase
+- **Fog-of-war**: Reduced from fixed 150px to difficulty-based (100-150px)
+- **Title screen**: Enhanced with difficulty selection and leaderboard
+- **Win screen**: Shows leaderboard position if time qualifies for top 5
+- **Game flow**: Click difficulty buttons to change settings before starting
+
 ### Added - Phase 1 (Core Loop)
 - **Game loop**: 60 FPS game loop with PixiJS ticker
 - **Player system**: Movement with WASD/arrow keys, collision detection
@@ -52,12 +77,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - jsdom: ^28.1.0 (test environment)
 
 ### Test Coverage
-- **Total**: 57 unit tests passing
+- **Total**: 79 unit tests passing
 - **Player**: 11 tests (movement, collision, state)
 - **Maze**: 12 tests (structure, collision, pathfinding)
 - **Input**: 8 tests (keyboard and touch handling)
 - **Renderer**: 12 tests (viewport, fog-of-war, visibility)
 - **MazeGenerator**: 14 tests (generation, connectivity, goal placement)
+- **SoundManager**: 10 tests (Web Audio API, initialization, playback)
+- **Leaderboard**: 12 tests (LocalStorage, ranking, persistence, clearing)
+
+## Completed - Phase 4 (Security & Optimization)
+
+### Security Audit
+- ✅ Ran `pnpm audit` - no vulnerabilities found
+- ✅ Updated all dependencies to latest safe versions
+- ✅ No high/critical security issues
+
+### Performance Optimization
+- ✅ Fixed fog-of-war memory leaks (reusable Graphics objects)
+- ✅ Fixed ticker callback accumulation
+- ✅ Fixed event listener leaks on screen transitions
+- ✅ Maintains stable 60 FPS indefinitely
+
+### Code Quality
+- ✅ No use of `eval()`, `Function()`, or dynamic code execution
+- ✅ No `innerHTML` with untrusted input (using PixiJS Text API)
+- ✅ No hardcoded secrets or API keys
+- ✅ Input validation implemented (keyboard and touch)
+- ✅ Production build successful
+
+### Cleanup
+- ✅ Removed unused Vite template files
+- ✅ All dependencies updated
+- ✅ All tests passing after updates
 
 ## Phase 4 Checklist
 
@@ -103,12 +155,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] Code comments verified for clarity
 
 ## Known Issues
-None at this time.
+None at this time. All 79 tests passing.
 
 ## Future Enhancements (Post-MVP)
-- **Leaderboard**: localStorage for high scores
-- **Multiple levels**: Difficulty progression
-- **Power-ups**: Speed boost, wall reveal
-- **Sound effects**: Footsteps, cheese collection
-- **Animations**: Sprite animations for player movement
-- **Enemies**: Moving hazards (optional)
+- **Persistent fog reveal**: Show explored areas in gray
+- **Visual feedback**: Button hover effects and animations
+- **Particle effects**: On cheese collection
+- **Power-ups**: Speed boost, wall reveal, extended vision
+- **Sprite animations**: Animated mouse walking
+- **Enemies**: Moving hazards (optional hardcore mode)
+- **Mini-map**: Corner overview of maze
+- **Multiplayer**: Ghost racing against your best time
+- **Settings menu**: Volume control, graphics quality
