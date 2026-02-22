@@ -625,6 +625,9 @@ export class Game {
     this.renderer.app.canvas.height = this.layout.canvasHeight;
     this.renderer.app.renderer.resize(this.layout.canvasWidth, this.layout.canvasHeight);
     
+    // Reset fog-of-war state to force recreation with new dimensions
+    this.renderer.resetFogState();
+    
     // Remove old screen containers from renderer
     this.renderer.container.removeChild(this.titleScreen.getContainer());
     this.renderer.container.removeChild(this.winScreen.getContainer());

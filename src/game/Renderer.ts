@@ -28,6 +28,11 @@ export class Renderer {
   private playerScale: number = 1;
   private screenFadeOverlay: Sprite | null = null;
   private fadeTexture: Texture | null = null;
+  
+  // Fog-of-war reusable objects (prevent memory leaks)
+  private fogCanvas: HTMLCanvasElement | null = null;
+  private fogSprite: Sprite | null = null;
+  private fogTexture: Texture | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -206,7 +211,7 @@ export class Renderer {
 
   /**
    * Render fog-of-war using a canvas with radial gradient.
-   * This creates a smooth circular gradient from transparent center to dark edges.
+   * Reuses the same canvas and sprite to prevent memory leaks.
    */
   renderFogOfWar(viewport: Viewport): void {
     try {
@@ -219,15 +224,25 @@ export class Renderer {
       const canvasH = this.app.canvas.height;
       const visibleRadius = viewport.radius;
       
-      // Clear previous fog graphics
-      this.fogMask.removeChildren();
+      // Initialize fog canvas and sprite on first call
+      if (!this.fogCanvas) {
+        this.fogCanvas = document.createElement('canvas');
+        this.fogCanvas.width = canvasW;
+        this.fogCanvas.height = canvasH;
+        
+        this.fogTexture = Texture.from(this.fogCanvas);
+        this.fogSprite = new Sprite(this.fogTexture);
+        this.fogMask.addChild(this.fogSprite);
+      }
       
-      // Create a canvas with radial gradient for fog effect
-      const fogCanvas = document.createElement('canvas');
-      fogCanvas.width = canvasW;
-      fogCanvas.height = canvasH;
+      // Update canvas size if screen size changed
+      if (this.fogCanvas.width !== canvasW || this.fogCanvas.height !== canvasH) {
+        this.fogCanvas.width = canvasW;
+        this.fogCanvas.height = canvasH;
+      }
       
-      const ctx = fogCanvas.getContext('2d');
+      // Draw gradient on existing canvas
+      const ctx = this.fogCanvas.getContext('2d');
       if (!ctx) return; // Canvas not supported
       
       // Create radial gradient: transparent in center -> black at edges
@@ -245,10 +260,8 @@ export class Renderer {
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvasW, canvasH);
       
-      // Convert canvas to sprite and add to fogMask
-      const fogTexture = Texture.from(fogCanvas);
-      const fogSprite = new Sprite(fogTexture);
-      this.fogMask.addChild(fogSprite);
+      // Update texture from canvas (efficient - reuses existing texture)
+      this.fogTexture?.update();
     } catch {
       // Silently ignore errors (e.g., during tests where PixiJS is not fully initialized)
       // In production, the guard checks prevent this from happening
@@ -363,6 +376,18 @@ export class Renderer {
     this.uiLayer.removeChildren().forEach(child => child.destroy());
   }
   
+  /**
+   * Reset fog-of-war state to force recreation with new dimensions.
+   * Call this when viewport size changes (e.g., difficulty change or window resize).
+   */
+  resetFogState(): void {
+    this.fogCanvas = null;
+    this.fogSprite = null;
+    this.fogTexture = null;
+    // Remove old fog sprite from fogMask if it exists
+    this.fogMask.removeChildren();
+  }
+
   /**
    * Destroy renderer and clean up all resources.
    */
